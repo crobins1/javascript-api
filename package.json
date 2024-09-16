@@ -1,7 +1,7 @@
 {
   "name": "nodejs",
   "version": "1.0.0",
-  "description": "Custom JavaScript API with sandboxed code execution",
+  "description": "Custom JavaScript API for Make.com",
   "main": "index.js",
   "scripts": {
     "start": "node index.js",
@@ -12,7 +12,6 @@
   "license": "ISC",
   "dependencies": {
     "body-parser": "^1.20.2",
-    "express": "^4.19.2",
-    "vm2": "^3.9.17"
+    "express": "^4.19.2"
   }
 }
