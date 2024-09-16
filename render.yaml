@@ -3,9 +3,10 @@ services:
     name: javascript-api
     env: node
     plan: free
-    buildCommand: 'npm install'
+    buildCommand: 'npm install && npm install express body-parser'
     startCommand: 'node index.js'
     envVars:
-      SECURE_TOKEN: "your_secure_token_here" # Replace with your actual token or leave for manual input
+      - key: SECURE_TOKEN
+        sync: false # Prompt for a value in the Render Dashboard
     autoDeploy: true
     region: oregon
