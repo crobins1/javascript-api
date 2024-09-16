@@ -1,7 +1,7 @@
 {
   "name": "nodejs",
   "version": "1.0.0",
-  "description": "Custom JavaScript API",
+  "description": "Custom JavaScript API with sandboxed code execution",
   "main": "index.js",
   "scripts": {
     "start": "node index.js",
@@ -11,9 +11,8 @@
   "author": "Jannis Moore",
   "license": "ISC",
   "dependencies": {
-    "@types/node": "^18.0.6",
     "body-parser": "^1.20.2",
     "express": "^4.19.2",
-    "node-fetch": "^2.6.7"
+    "vm2": "^3.9.17" // Added vm2
   }
 }
