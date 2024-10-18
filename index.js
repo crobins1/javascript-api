@@ -43,12 +43,15 @@ app.get("/health", (req, res) => {
 app.post("/extract-images", checkToken, (req, res) => {
     const { htmlContent } = req.body;
 
+    // Enhanced error handling for debugging
     if (!htmlContent || typeof htmlContent !== "string") {
         console.error("Invalid or missing data. htmlContent is:", htmlContent);
         return res.status(400).json({ error: "Invalid or missing data. Please provide a valid HTML string in 'htmlContent'." });
     }
 
     try {
+        console.log("Extracting images from htmlContent:", htmlContent); // Debug log
+
         // Use Cheerio to extract image data from raw HTML content
         const $ = cheerio.load(htmlContent);
         const imageDetails = [];
@@ -72,6 +75,8 @@ app.post("/extract-images", checkToken, (req, res) => {
 
         // Remove duplicates based on URLs
         const uniqueImageDetails = Array.from(new Set(imageDetails.map(JSON.stringify))).map(JSON.parse);
+
+        console.log("Extracted image details:", uniqueImageDetails); // Debug log
 
         // Respond with the list of unique images with details
         res.json({ images: uniqueImageDetails });
