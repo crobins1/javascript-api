@@ -1,6 +1,9 @@
 const express = require("express");
 const bodyParser = require("body-parser");
-const { VM } = require("vm2"); // Import vm2
+const { VM } = require("vm2"); // Import vm2 for sandboxed execution
+const rateLimit = require("express-rate-limit");
+const morgan = require("morgan");
+require("dotenv").config(); // Load environment variables
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -8,10 +11,19 @@ const PORT = process.env.PORT || 5000;
 // Secure token from environment variable
 const SECURE_TOKEN = process.env.SECURE_TOKEN;
 
-// Middleware to parse text/plain bodies
-app.use(bodyParser.text({ type: "text/plain" }));
+// Middleware Setup
+app.use(bodyParser.json()); // Parse JSON bodies
+app.use(morgan("combined")); // HTTP request logging
 
-// Function to check token
+// Rate Limiting to prevent abuse
+const limiter = rateLimit({
+    windowMs: 15 * 60 * 1000, // 15 minutes
+    max: 100, // Limit each IP to 100 requests per windowMs
+    message: { error: "Too many requests, please try again later." }
+});
+app.use(limiter);
+
+// Authorization Middleware
 const checkToken = (req, res, next) => {
     const token = req.headers.authorization;
     if (token === SECURE_TOKEN) {
@@ -21,35 +33,86 @@ const checkToken = (req, res, next) => {
     }
 };
 
-// Execute endpoint with sandboxed environment
-app.post("/execute", checkToken, (req, res) => {
-    const code = req.body;
-    if (!code) {
-        return res.status(400).json({ error: "No code provided" });
-    }
-
-    try {
-        // Create a new VM instance with limited permissions
-        const vm = new VM({
-            timeout: 1000, // Execution timeout in milliseconds
-            sandbox: {}
-        });
-
-        // Execute the code within the sandbox
-        const result = vm.run(code);
-        res.json({ result });
-    } catch (error) {
-        console.error("Execution Error:", error);
-        res.status(500).json({ error: error.message });
-    }
-});
-
 // Health Check Endpoint
 app.get("/health", (req, res) => {
     res.json({ status: "OK" });
 });
 
-// Start the server
+// Image Extraction Endpoint
+app.post("/extract-images", checkToken, (req, res) => {
+    const elementorData = req.body;
+
+    if (!elementorData) {
+        return res.status(400).json({ error: "No data provided" });
+    }
+
+    try {
+        // Validate that the data is an array
+        if (!Array.isArray(elementorData)) {
+            throw new Error("Invalid data format: Expected an array");
+        }
+
+        // Recursive function to extract image URLs
+        const extractImageUrls = (elements, externalUrls = [], base64Urls = []) => {
+            elements.forEach(element => {
+                if (element.settings) {
+                    // Check for background_image.url
+                    if (element.settings.background_image && element.settings.background_image.url) {
+                        const url = element.settings.background_image.url;
+                        if (isBase64(url)) {
+                            base64Urls.push(url);
+                        } else {
+                            externalUrls.push(url);
+                        }
+                    }
+
+                    // Check for image.url in widgets
+                    if (element.settings.image && element.settings.image.url) {
+                        const url = element.settings.image.url;
+                        if (isBase64(url)) {
+                            base64Urls.push(url);
+                        } else {
+                            externalUrls.push(url);
+                        }
+                    }
+
+                    // Additional image fields can be checked here
+                }
+
+                // If the element has child elements, recurse
+                if (element.elements && Array.isArray(element.elements)) {
+                    extractImageUrls(element.elements, externalUrls, base64Urls);
+                }
+            });
+
+            return { externalUrls, base64Urls };
+        };
+
+        // Helper function to check if a string is a base64 data URI
+        const isBase64 = (str) => /^data:image\/[a-zA-Z]+;base64,/.test(str);
+
+        // Extract image URLs
+        const { externalUrls, base64Urls } = extractImageUrls(elementorData);
+
+        // Remove duplicates
+        const uniqueExternalUrls = [...new Set(externalUrls)];
+        const uniqueBase64Urls = [...new Set(base64Urls)];
+
+        // Respond with the extracted URLs
+        res.json({
+            externalImageUrls: uniqueExternalUrls,
+            base64ImageUrls: uniqueBase64Urls
+        });
+    } catch (error) {
+        console.error("Extraction Error:", error);
+        res.status(500).json({
+            error: "Failed to extract image URLs",
+            message: error.message
+        });
+    }
+});
+
+// Start the Server
 app.listen(PORT, () => {
     console.log(`Server is running on port ${PORT}`);
 });
