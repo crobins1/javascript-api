@@ -1,6 +1,6 @@
-// index.js
 const express = require("express");
 const bodyParser = require("body-parser");
+const { VM } = require('vm2');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -21,7 +21,7 @@ const checkToken = (req, res, next) => {
     }
 };
 
-// Execute endpoint
+// Execute endpoint with sandboxed environment
 app.post("/execute", checkToken, (req, res) => {
     const code = req.body;
     if (!code) {
@@ -29,11 +29,17 @@ app.post("/execute", checkToken, (req, res) => {
     }
 
     try {
-        // Execute the code
-        const result = eval(code);
+        // Create a new VM instance with limited permissions
+        const vm = new VM({
+            timeout: 1000, // Execution timeout in milliseconds
+            sandbox: {}
+        });
+
+        // Execute the code within the sandbox
+        const result = vm.run(code);
         res.json({ result });
     } catch (error) {
-        res.status(500).json({ error: error.message, trace: error.stack });
+        res.status(500).json({ error: error.message });
     }
 });
 
