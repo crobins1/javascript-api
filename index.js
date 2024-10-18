@@ -38,21 +38,20 @@ app.get("/health", (req, res) => {
     res.json({ status: "OK" });
 });
 
-// Simplified Image Extraction Endpoint
+// Image Extraction Endpoint
 app.post("/extract-images", checkToken, (req, res) => {
-    const { htmlContent, postId, excerpt, slug, title, featuredMedia } = req.body;
+    const { htmlContent } = req.body;
 
     if (!htmlContent) {
-        return res.status(400).json({ error: "No HTML content provided" });
+        return res.status(400).json({ error: "No data provided" });
     }
 
     try {
-        const imageDetails = [];
-        
-        // Use Cheerio to parse the HTML content and extract image data
+        // Use Cheerio to extract image data from raw HTML content
+        const cheerio = require("cheerio");
         const $ = cheerio.load(htmlContent);
+        const imageDetails = [];
 
-        // Extract image URLs from <img> tags
         $('img').each((i, img) => {
             const url = $(img).attr('src');
             const alt = $(img).attr('alt') || '';
@@ -71,18 +70,10 @@ app.post("/extract-images", checkToken, (req, res) => {
         });
 
         // Remove duplicates based on URLs
-        const uniqueImageDetails = Array.from(new Set(imageDetails.map(img => img.url)))
-            .map(url => imageDetails.find(img => img.url === url));
+        const uniqueImageDetails = Array.from(new Set(imageDetails.map(JSON.stringify))).map(JSON.parse);
 
-        // Respond with the extracted images and additional information
-        res.json({
-            postId,
-            excerpt,
-            slug,
-            title,
-            featuredMedia,
-            images: uniqueImageDetails
-        });
+        // Respond with the list of unique images with details
+        res.json({ images: uniqueImageDetails });
     } catch (error) {
         console.error("Extraction Error:", error);
         res.status(500).json({
@@ -91,6 +82,7 @@ app.post("/extract-images", checkToken, (req, res) => {
         });
     }
 });
+
 
 
 // Generic JavaScript Execution Endpoint for Make.com
