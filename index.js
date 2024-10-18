@@ -42,13 +42,12 @@ app.get("/health", (req, res) => {
 app.post("/extract-images", checkToken, (req, res) => {
     const { htmlContent } = req.body;
 
-    if (!htmlContent) {
-        return res.status(400).json({ error: "No data provided" });
+    if (!htmlContent || typeof htmlContent !== "string") {
+        return res.status(400).json({ error: "Invalid or missing data. Please provide a valid HTML string in 'htmlContent'." });
     }
 
     try {
         // Use Cheerio to extract image data from raw HTML content
-        const cheerio = require("cheerio");
         const $ = cheerio.load(htmlContent);
         const imageDetails = [];
 
@@ -82,6 +81,7 @@ app.post("/extract-images", checkToken, (req, res) => {
         });
     }
 });
+
 
 
 
