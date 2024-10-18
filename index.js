@@ -1,6 +1,6 @@
 const express = require("express");
 const bodyParser = require("body-parser");
-const { VM } = require('vm2');
+const { VM } = require("vm2"); // Import vm2
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -39,6 +39,7 @@ app.post("/execute", checkToken, (req, res) => {
         const result = vm.run(code);
         res.json({ result });
     } catch (error) {
+        console.error("Execution Error:", error);
         res.status(500).json({ error: error.message });
     }
 });
