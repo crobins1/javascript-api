@@ -38,68 +38,50 @@ app.get("/health", (req, res) => {
     res.json({ status: "OK" });
 });
 
-// Image Extraction Endpoint
+// Simplified Image Extraction Endpoint
 app.post("/extract-images", checkToken, (req, res) => {
-    const elementorData = req.body;
+    const { htmlContent, postId, excerpt, slug, title, featuredMedia } = req.body;
 
-    if (!elementorData) {
-        return res.status(400).json({ error: "No data provided" });
+    if (!htmlContent) {
+        return res.status(400).json({ error: "No HTML content provided" });
     }
 
     try {
-        // Validate that the data is an array
-        if (!Array.isArray(elementorData)) {
-            throw new Error("Invalid data format: Expected an array");
-        }
+        const imageDetails = [];
+        
+        // Use Cheerio to parse the HTML content and extract image data
+        const $ = cheerio.load(htmlContent);
 
-        // Recursive function to extract image URLs
-        const extractImageUrls = (elements, externalUrls = [], base64Urls = []) => {
-            elements.forEach(element => {
-                if (element.settings) {
-                    // Check for background_image.url
-                    if (element.settings.background_image && element.settings.background_image.url) {
-                        const url = element.settings.background_image.url;
-                        if (isBase64(url)) {
-                            base64Urls.push(url);
-                        } else {
-                            externalUrls.push(url);
-                        }
-                    }
+        // Extract image URLs from <img> tags
+        $('img').each((i, img) => {
+            const url = $(img).attr('src');
+            const alt = $(img).attr('alt') || '';
+            const title = $(img).attr('title') || '';
+            const description = $(img).attr('data-description') || '';
 
-                    // Check for image.url in widgets
-                    if (element.settings.image && element.settings.image.url) {
-                        const url = element.settings.image.url;
-                        if (isBase64(url)) {
-                            base64Urls.push(url);
-                        } else {
-                            externalUrls.push(url);
-                        }
-                    }
-                }
+            if (url) {
+                imageDetails.push({
+                    url: url,
+                    title: title,
+                    alt: alt,
+                    description: description,
+                    type: url.startsWith('data:image') ? 'base64' : 'external'
+                });
+            }
+        });
 
-                // If the element has child elements, recurse
-                if (element.elements && Array.isArray(element.elements)) {
-                    extractImageUrls(element.elements, externalUrls, base64Urls);
-                }
-            });
+        // Remove duplicates based on URLs
+        const uniqueImageDetails = Array.from(new Set(imageDetails.map(img => img.url)))
+            .map(url => imageDetails.find(img => img.url === url));
 
-            return { externalUrls, base64Urls };
-        };
-
-        // Helper function to check if a string is a base64 data URI
-        const isBase64 = (str) => /^data:image\/[a-zA-Z]+;base64,/.test(str);
-
-        // Extract image URLs
-        const { externalUrls, base64Urls } = extractImageUrls(elementorData);
-
-        // Remove duplicates
-        const uniqueExternalUrls = [...new Set(externalUrls)];
-        const uniqueBase64Urls = [...new Set(base64Urls)];
-
-        // Respond with the extracted URLs
+        // Respond with the extracted images and additional information
         res.json({
-            externalImageUrls: uniqueExternalUrls,
-            base64ImageUrls: uniqueBase64Urls
+            postId,
+            excerpt,
+            slug,
+            title,
+            featuredMedia,
+            images: uniqueImageDetails
         });
     } catch (error) {
         console.error("Extraction Error:", error);
@@ -109,6 +91,7 @@ app.post("/extract-images", checkToken, (req, res) => {
         });
     }
 });
+
 
 // Generic JavaScript Execution Endpoint for Make.com
 app.post("/execute", checkToken, (req, res) => {
