@@ -1,24 +1,23 @@
 const express = require("express");
 const bodyParser = require("body-parser");
-const { VM } = require("vm2"); // Import vm2 for sandboxed execution
+const { VM } = require("vm2");
 const rateLimit = require("express-rate-limit");
 const morgan = require("morgan");
-require("dotenv").config(); // Load environment variables
+const cheerio = require("cheerio");
+require("dotenv").config();
 
 const app = express();
 const PORT = process.env.PORT || 5000;
-
-// Secure token from environment variable
 const SECURE_TOKEN = process.env.SECURE_TOKEN;
 
 // Middleware Setup
-app.use(bodyParser.json()); // Parse JSON bodies
-app.use(morgan("combined")); // HTTP request logging
+app.use(bodyParser.json({ limit: '50mb' }));
+app.use(morgan("combined"));
 
-// Rate Limiting to prevent abuse
+// Rate Limiting
 const limiter = rateLimit({
-    windowMs: 15 * 60 * 1000, // 15 minutes
-    max: 100, // Limit each IP to 100 requests per windowMs
+    windowMs: 15 * 60 * 1000,
+    max: 100,
     message: { error: "Too many requests, please try again later." }
 });
 app.use(limiter);
@@ -38,17 +37,14 @@ app.get("/health", (req, res) => {
     res.json({ status: "OK" });
 });
 
-// Image Extraction Endpoint
+// Enhanced Image Extraction Endpoint
 app.post("/extract-images", checkToken, (req, res) => {
     const { htmlContent } = req.body;
-
     if (!htmlContent || typeof htmlContent !== 'string' || htmlContent.trim() === "") {
         return res.status(400).json({ error: "Invalid or missing data. Please provide a valid HTML string in 'htmlContent'." });
     }
 
     try {
-        // Use Cheerio to extract image data from raw HTML content
-        const cheerio = require("cheerio");
         const $ = cheerio.load(htmlContent);
         const imageDetails = [];
 
@@ -56,14 +52,18 @@ app.post("/extract-images", checkToken, (req, res) => {
             const url = $(img).attr('src');
             const alt = $(img).attr('alt') || '';
             const title = $(img).attr('title') || '';
-            const description = $(img).attr('data-description') || '';
+            const width = $(img).attr('width') || '';
+            const height = $(img).attr('height') || '';
+            const className = $(img).attr('class') || '';
 
             if (url) {
                 imageDetails.push({
                     url: url,
-                    title: title,
                     alt: alt,
-                    description: description,
+                    title: title,
+                    width: width,
+                    height: height,
+                    class: className,
                     type: url.startsWith('data:image') ? 'base64' : 'external'
                 });
             }
@@ -72,7 +72,6 @@ app.post("/extract-images", checkToken, (req, res) => {
         // Remove duplicates based on URLs
         const uniqueImageDetails = Array.from(new Set(imageDetails.map(JSON.stringify))).map(JSON.parse);
 
-        // Respond with the list of unique images with details
         res.json({ images: uniqueImageDetails });
     } catch (error) {
         console.error("Extraction Error:", error);
@@ -83,28 +82,24 @@ app.post("/extract-images", checkToken, (req, res) => {
     }
 });
 
-
-
-
-// Generic JavaScript Execution Endpoint for Make.com
+// Generic JavaScript Execution Endpoint
 app.post("/execute", checkToken, (req, res) => {
     const { script, context } = req.body;
-
     if (!script) {
         return res.status(400).json({ error: "Missing required field: script" });
     }
 
     try {
-        // Create a new VM instance with default options
         const vm = new VM({
-            timeout: 1000, // Timeout for script execution (1 second)
-            sandbox: { context } // Provide any additional context variables here
+            timeout: 5000, // Increased timeout to 5 seconds
+            sandbox: { 
+                context,
+                cheerio, // Add cheerio to the sandbox for HTML parsing
+                fetch: require('node-fetch') // Add fetch for HTTP requests
+            }
         });
 
-        // Execute the script in a sandboxed environment
         const result = vm.run(script);
-
-        // Respond with the result of the script execution
         res.json({ result });
     } catch (error) {
         console.error("Execution Error:", error);
