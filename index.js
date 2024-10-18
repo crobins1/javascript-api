@@ -1,23 +1,25 @@
 const express = require("express");
 const bodyParser = require("body-parser");
-const { VM } = require("vm2");
+const { VM } = require("vm2"); // Import vm2 for sandboxed execution
 const rateLimit = require("express-rate-limit");
 const morgan = require("morgan");
-const cheerio = require("cheerio");
-require("dotenv").config();
+const cheerio = require("cheerio"); // Import cheerio for HTML parsing
+require("dotenv").config(); // Load environment variables
 
 const app = express();
 const PORT = process.env.PORT || 5000;
+
+// Secure token from environment variable
 const SECURE_TOKEN = process.env.SECURE_TOKEN;
 
 // Middleware Setup
-app.use(bodyParser.json({ limit: '50mb' }));
-app.use(morgan("combined"));
+app.use(bodyParser.json()); // Parse JSON bodies
+app.use(morgan("combined")); // HTTP request logging
 
-// Rate Limiting
+// Rate Limiting to prevent abuse
 const limiter = rateLimit({
-    windowMs: 15 * 60 * 1000,
-    max: 100,
+    windowMs: 15 * 60 * 1000, // 15 minutes
+    max: 100, // Limit each IP to 100 requests per windowMs
     message: { error: "Too many requests, please try again later." }
 });
 app.use(limiter);
@@ -37,14 +39,17 @@ app.get("/health", (req, res) => {
     res.json({ status: "OK" });
 });
 
-// Enhanced Image Extraction Endpoint
+// Image Extraction Endpoint
 app.post("/extract-images", checkToken, (req, res) => {
     const { htmlContent } = req.body;
-    if (!htmlContent || typeof htmlContent !== 'string' || htmlContent.trim() === "") {
+
+    if (!htmlContent || typeof htmlContent !== "string") {
+        console.error("Invalid or missing data. htmlContent is:", htmlContent);
         return res.status(400).json({ error: "Invalid or missing data. Please provide a valid HTML string in 'htmlContent'." });
     }
 
     try {
+        // Use Cheerio to extract image data from raw HTML content
         const $ = cheerio.load(htmlContent);
         const imageDetails = [];
 
@@ -52,18 +57,14 @@ app.post("/extract-images", checkToken, (req, res) => {
             const url = $(img).attr('src');
             const alt = $(img).attr('alt') || '';
             const title = $(img).attr('title') || '';
-            const width = $(img).attr('width') || '';
-            const height = $(img).attr('height') || '';
-            const className = $(img).attr('class') || '';
+            const description = $(img).attr('data-description') || '';
 
             if (url) {
                 imageDetails.push({
                     url: url,
-                    alt: alt,
                     title: title,
-                    width: width,
-                    height: height,
-                    class: className,
+                    alt: alt,
+                    description: description,
                     type: url.startsWith('data:image') ? 'base64' : 'external'
                 });
             }
@@ -72,6 +73,7 @@ app.post("/extract-images", checkToken, (req, res) => {
         // Remove duplicates based on URLs
         const uniqueImageDetails = Array.from(new Set(imageDetails.map(JSON.stringify))).map(JSON.parse);
 
+        // Respond with the list of unique images with details
         res.json({ images: uniqueImageDetails });
     } catch (error) {
         console.error("Extraction Error:", error);
@@ -82,24 +84,25 @@ app.post("/extract-images", checkToken, (req, res) => {
     }
 });
 
-// Generic JavaScript Execution Endpoint
+// Generic JavaScript Execution Endpoint for Make.com
 app.post("/execute", checkToken, (req, res) => {
-    const { script, context } = req.body;
+    const { script, context, postId, excerpt, slug, title, featuredMedia } = req.body;
+
     if (!script) {
         return res.status(400).json({ error: "Missing required field: script" });
     }
 
     try {
+        // Create a new VM instance with default options
         const vm = new VM({
-            timeout: 5000, // Increased timeout to 5 seconds
-            sandbox: { 
-                context,
-                cheerio, // Add cheerio to the sandbox for HTML parsing
-                fetch: require('node-fetch') // Add fetch for HTTP requests
-            }
+            timeout: 1000, // Timeout for script execution (1 second)
+            sandbox: { context, postId, excerpt, slug, title, featuredMedia } // Provide any additional context variables here
         });
 
+        // Execute the script in a sandboxed environment
         const result = vm.run(script);
+
+        // Respond with the result of the script execution
         res.json({ result });
     } catch (error) {
         console.error("Execution Error:", error);
