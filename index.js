@@ -75,8 +75,6 @@ app.post("/extract-images", checkToken, (req, res) => {
                             externalUrls.push(url);
                         }
                     }
-
-                    // Additional image fields can be checked here
                 }
 
                 // If the element has child elements, recurse
@@ -107,6 +105,35 @@ app.post("/extract-images", checkToken, (req, res) => {
         console.error("Extraction Error:", error);
         res.status(500).json({
             error: "Failed to extract image URLs",
+            message: error.message
+        });
+    }
+});
+
+// Generic JavaScript Execution Endpoint for Make.com
+app.post("/execute", checkToken, (req, res) => {
+    const { script, context } = req.body;
+
+    if (!script) {
+        return res.status(400).json({ error: "Missing required field: script" });
+    }
+
+    try {
+        // Create a new VM instance with default options
+        const vm = new VM({
+            timeout: 1000, // Timeout for script execution (1 second)
+            sandbox: { context } // Provide any additional context variables here
+        });
+
+        // Execute the script in a sandboxed environment
+        const result = vm.run(script);
+
+        // Respond with the result of the script execution
+        res.json({ result });
+    } catch (error) {
+        console.error("Execution Error:", error);
+        res.status(500).json({
+            error: "Failed to execute script",
             message: error.message
         });
     }
