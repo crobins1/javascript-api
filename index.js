@@ -40,6 +40,8 @@ app.get("/health", (req, res) => {
 });
 
 // Image Extraction Endpoint
+
+// Image Extraction Endpoint
 app.post("/extract-images", checkToken, (req, res) => {
     const { htmlContent } = req.body;
 
@@ -88,6 +90,7 @@ app.post("/extract-images", checkToken, (req, res) => {
         });
     }
 });
+
 
 // Generic JavaScript Execution Endpoint for Make.com
 app.post("/execute", checkToken, (req, res) => {
