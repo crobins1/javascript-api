@@ -1,10 +1,10 @@
 const express = require("express");
 const bodyParser = require("body-parser");
-const { VM } = require("vm2"); // Import vm2 for sandboxed execution
+const { VM } = require("vm2");
 const rateLimit = require("express-rate-limit");
 const morgan = require("morgan");
 const cheerio = require("cheerio"); // Import cheerio for HTML parsing
-require("dotenv").config(); // Load environment variables
+require("dotenv").config();
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -39,58 +39,91 @@ app.get("/health", (req, res) => {
     res.json({ status: "OK" });
 });
 
-// Image Extraction Endpoint
-
-// Image Extraction Endpoint
+// Updated Image Extraction Endpoint
 app.post("/extract-images", checkToken, (req, res) => {
-    const { htmlContent } = req.body;
+    const { htmlContent, elementorData } = req.body;
 
     // Enhanced error handling for debugging
-    if (!htmlContent || typeof htmlContent !== "string") {
-        console.error("Invalid or missing data. htmlContent is:", htmlContent);
-        return res.status(400).json({ error: "Invalid or missing data. Please provide a valid HTML string in 'htmlContent'." });
+    if (!htmlContent && !elementorData) {
+        return res.status(400).json({ error: "Invalid or missing data. Please provide 'htmlContent' and/or 'elementorData'." });
     }
 
-    try {
-        console.log("Extracting images from htmlContent:", htmlContent); // Debug log
+    const imageDetails = [];
 
-        // Use Cheerio to extract image data from raw HTML content
-        const $ = cheerio.load(htmlContent);
-        const imageDetails = [];
+    // Extract images from HTML content if available
+    if (htmlContent && typeof htmlContent === "string") {
+        try {
+            const $ = cheerio.load(htmlContent);
 
-        $('img').each((i, img) => {
-            const url = $(img).attr('src');
-            const alt = $(img).attr('alt') || '';
-            const title = $(img).attr('title') || '';
-            const description = $(img).attr('data-description') || '';
+            $('img').each((i, img) => {
+                const url = $(img).attr('src');
+                const alt = $(img).attr('alt') || '';
+                const title = $(img).attr('title') || '';
+                const description = $(img).attr('data-description') || '';
 
-            if (url) {
-                imageDetails.push({
-                    url: url,
-                    title: title,
-                    alt: alt,
-                    description: description,
-                    type: url.startsWith('data:image') ? 'base64' : 'external'
+                if (url) {
+                    imageDetails.push({
+                        url: url,
+                        title: title,
+                        alt: alt,
+                        description: description,
+                        type: url.startsWith('data:image') ? 'base64' : 'external'
+                    });
+                }
+            });
+        } catch (error) {
+            console.error("HTML Extraction Error:", error);
+            return res.status(500).json({
+                error: "Failed to extract images from HTML content",
+                message: error.message
+            });
+        }
+    }
+
+    // Extract images from Elementor JSON data if available
+    if (elementorData && typeof elementorData === "string") {
+        try {
+            const data = JSON.parse(elementorData);
+
+            const extractImagesFromElements = (elements) => {
+                elements.forEach(element => {
+                    if (element.settings && element.settings.background_image && element.settings.background_image.url) {
+                        imageDetails.push({
+                            url: element.settings.background_image.url,
+                            title: element.settings.background_image.alt || '',
+                            alt: element.settings.background_image.alt || '',
+                            description: element.settings.background_image.description || '',
+                            type: 'external'
+                        });
+                    }
+
+                    // If there are nested elements, extract from them as well
+                    if (element.elements && Array.isArray(element.elements)) {
+                        extractImagesFromElements(element.elements);
+                    }
                 });
+            };
+
+            if (Array.isArray(data)) {
+                extractImagesFromElements(data);
             }
-        });
-
-        // Remove duplicates based on URLs
-        const uniqueImageDetails = Array.from(new Set(imageDetails.map(JSON.stringify))).map(JSON.parse);
-
-        console.log("Extracted image details:", uniqueImageDetails); // Debug log
-
-        // Respond with the list of unique images with details
-        res.json({ images: uniqueImageDetails });
-    } catch (error) {
-        console.error("Extraction Error:", error);
-        res.status(500).json({
-            error: "Failed to extract image URLs",
-            message: error.message
-        });
+        } catch (error) {
+            console.error("Elementor Data Extraction Error:", error);
+            return res.status(500).json({
+                error: "Failed to extract images from Elementor data",
+                message: error.message
+            });
+        }
     }
-});
 
+    // Remove duplicates based on URLs
+    const uniqueImageDetails = Array.from(new Set(imageDetails.map(JSON.stringify))).map(JSON.parse);
+
+    console.log("Extracted image details:", uniqueImageDetails); // Debug log
+
+    // Respond with the list of unique images with details
+    res.json({ images: uniqueImageDetails });
+});
 
 // Generic JavaScript Execution Endpoint for Make.com
 app.post("/execute", checkToken, (req, res) => {
